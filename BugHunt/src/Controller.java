@@ -2,6 +2,7 @@ import javax.swing.JFrame; // for JFrame
 import javax.swing.JOptionPane;
 import java.awt.*; // for graphics & MouseListener 
 import java.awt.event.*; // need for events and MouseListener
+import java.util.Timer;
 import java.util.TimerTask; // need for Timer and TimerTask classes
 
 ////////////////////////////////////
@@ -13,20 +14,24 @@ import java.util.TimerTask; // need for Timer and TimerTask classes
 class Controller extends TimerTask implements MouseListener  {
     public static final int SLOW_BUG = 0; // these are in order
     public static final int FAST_BUG = 1;
-    public static final int BUG_DONE = 2; // this should be last
+    public static final int VERY_FAST_BUG = 2;
+    public static final int BUG_DONE = 3; // this should be last
+    
  
-    public static final int TIME_TO_MOVE_BUGS_IN_MILLISECONDS = 70; // 80 milliseconds on timer
-    public static final int NUMBER_OF_BUG_TYPES = 2;// to match the number of game levels slow + fast = 2
-    public static final int MAX_NUMBER_OF_BUGS = 1; // cheap short cut for array sizing
+    public static final int TIME_TO_MOVE_BUGS_IN_MILLISECONDS = 80; // 80 milliseconds on timer
+    public static final int NUMBER_OF_BUG_TYPES = 4;// to match the number of game levels slow + fast = 2
+    public static final int MAX_NUMBER_OF_BUGS = 4; // cheap short cut for array sizing
 
     public JFrame gameJFrame;
     public Container gameContentPane;
-    private int bugLevel;
+    private int bugLevel[] = new int [MAX_NUMBER_OF_BUGS];
     private boolean gameIsReady = false;
     private Bug gameBug[] = new Bug[NUMBER_OF_BUG_TYPES];
     private java.util.Timer gameTimer = new java.util.Timer();
     private int xMouseOffsetToContentPaneFromJFrame = 0;
     private int yMouseOffsetToContentPaneFromJFrame = 0;
+    private static int timesMissed = 0;
+    private static Timer timer;
     
     public Controller(String passedInWindowTitle, 
         int gameWindowX, int gameWindowY, int gameWindowWidth, int gameWindowHeight){
@@ -45,21 +50,28 @@ class Controller extends TimerTask implements MouseListener  {
         yMouseOffsetToContentPaneFromJFrame = gameWindowHeight - gameContentPane.getHeight()-borderWidth; // assume side border = bottom border; ignore title bar
 
         // create the bugs, now that JFrame has been initialized
-        gameBug[SLOW_BUG] = new SlowBug(gameJFrame,3,10);// JFrame, hits required,% change direction
-        gameBug[FAST_BUG] = new FastBug(gameJFrame,4,25);// JFrame, hits required,% change direction           
+        gameBug[SLOW_BUG] = new SlowBug(gameJFrame,1,10);// JFrame, hits required,% change direction
+        gameBug[FAST_BUG] = new FastBug(gameJFrame,1,25);// JFrame, hits required,% change direction   
+        gameBug[VERY_FAST_BUG] = new VeryFastBug(gameJFrame,5,35);
 
         resetGame(SLOW_BUG);
         gameTimer.schedule(this, 0, TIME_TO_MOVE_BUGS_IN_MILLISECONDS);    
  
         // register this class as a mouse event listener for the JFrame
         gameJFrame.addMouseListener(this);
+        
+        timer();
     }   
+    
+    
     
     public void resetGame(int startingBugLevel){
         gameIsReady = false;
         bugLevel = startingBugLevel;
         currentBug().create();
         gameIsReady = true;
+        timesMissed = 0;
+        timer();
     }
     
     private void bugGotHit(){
@@ -81,31 +93,60 @@ class Controller extends TimerTask implements MouseListener  {
         return gameBug[bugLevel];
     }
     
+    private static void timer(){
+    	timer = new Timer();
+    	timer.schedule(new TimerTask() {
+    		public void run(){
+    			timesMissed ++;
+    			System.out.println("times missed " + timesMissed);
+    			timer.cancel();
+    			timer();
+    		}
+    	}, 6000);
+    }
+    
     //run() to override run() in java.util.TimerTask
     // this is run when timer expires
     public void run() {
         if (gameIsReady){
             currentBug().move();
+            if (timesMissed == 5){
+            	timer.cancel();
+            	JOptionPane.showMessageDialog(gameJFrame,  "you missed 5 times (Loser!)");
+            	currentBug().kill();
+            	resetGame(SLOW_BUG);
+            }
         }
     }
 
     public void mousePressed(MouseEvent event){
         // make sure game is in progress
         if (gameIsReady){
+        	timer.cancel();
+        	timer();
             if (currentBug().isBugHit(event.getX()-xMouseOffsetToContentPaneFromJFrame, event.getY()-yMouseOffsetToContentPaneFromJFrame)){
                 bugGotHit();
                 if (didIWin()){   // did they win?
                    gameIsReady = false; 
                    JOptionPane.showMessageDialog(gameJFrame,"You WON!");
                    JOptionPane.showMessageDialog(gameJFrame,"Let's play again!");
+                   timer.cancel();
                    resetGame(SLOW_BUG);
                  }
             }
             else { // they missed so game is over
+            	if (timesMissed ==5){
+            		timer.cancel();
                     JOptionPane.showMessageDialog(gameJFrame,"You Missed (Loser)!");
                     currentBug().kill();
                     resetGame(SLOW_BUG);
+            	}
+            	else {
+            		timesMissed ++;
+            		System.out.println("Times missed " + timesMissed);
+            	}
             }
+            
         }
     }
     
